@@ -45,36 +45,34 @@ impl FmStreamClient {
         }
     }
 
-    pub async fn search(
-        &self,
-        country: Option<&str>,
-        genre: Option<&str>,
-        query: Option<&str>,
-        limit: usize,
-    ) -> Result<Vec<Station>> {
-        let mut params: Vec<(&str, String)> = Vec::new();
-        params.push(("limit", limit.to_string()));
-        params.push(("hidebroken", "true".to_string()));
-        params.push(("order", "votes".to_string()));
-        params.push(("reverse", "true".to_string()));
+       pub async fn search(
+           &self,
+           country: Option<&str>,
+           name_query: &str,
+           limit: usize,
+       ) -> Result<Vec<Station>> {
+           let mut params: Vec<(&str, String)> = Vec::new();
+           params.push(("limit", limit.to_string()));
+           params.push(("hidebroken", "true".to_string()));
+           params.push(("order", "votes".to_string()));
+           params.push(("reverse", "true".to_string()));
 
-        if let Some(q) = query { if !q.is_empty() { params.push(("name", q.to_string())); } }
-        if let Some(c) = country { if !c.is_empty() { params.push(("countrycode", c.to_string())); } }
-        if let Some(g) = genre { if !g.is_empty() { params.push(("tag", g.to_string())); } }
+           if let Some(c) = country { params.push(("countrycode", c.to_string())); }
+           if !name_query.is_empty() { params.push(("name", name_query.to_string())); }
 
-        let response = self.client
-            .get(&self.base_url)
-            .query(&params)
-            .send()
-            .await?;
+           let response = self.client
+               .get(&self.base_url)
+               .query(&params)
+               .send()
+               .await?;
 
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!("HTTP Error: {}", response.status()));
-        }
+           if !response.status().is_success() {
+               return Err(anyhow::anyhow!("HTTP Error: {}", response.status()));
+           }
 
-        let stations: Vec<Station> = response.json().await?;
-        Ok(stations)
-    }
+           let stations: Vec<Station> = response.json().await?;
+           Ok(stations)
+       }
 
     pub fn mock_stations() -> Vec<Station> {
         vec![
