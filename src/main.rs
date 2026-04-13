@@ -5,8 +5,6 @@ mod app;
 
 use anyhow::Result;
 use crossterm::event::{self, KeyCode, KeyEventKind};
-// #[allow(unused_imports)]  // ✅ Раскомментируй, если оставляешь Frame
-// use ratatui::Frame;
 use app::App;
 
 #[tokio::main]
@@ -17,7 +15,7 @@ async fn main() -> Result<()> {
     loop {
         terminal.draw(|f| {
             let (search_area, list_area, info_area) = ui::render_layout(f);
-            ui::render_search_bar(f, search_area, &app.query);
+            ui::render_search_bar(f, search_area, &app.search_query, app.loading);
             ui::render_station_list(f, list_area, &app.stations, app.selected);
             ui::render_info_panel(f, info_area, &app.status, app.volume);
         })?;
@@ -29,37 +27,32 @@ async fn main() -> Result<()> {
                     KeyCode::Char('q') => break,
                     KeyCode::Down | KeyCode::Char('j') => app.select_next(),
                     KeyCode::Up | KeyCode::Char('k') => app.select_prev(),
-                    KeyCode::Enter => app.play_selected(),
+                    KeyCode::Enter => {
+                        if !app.loading {
+                            if !app.search_query.is_empty() {
+                                tokio::task::block_in_place(|| {
+                                    tokio::runtime::Handle::current().block_on(app.fetch_from_api());
+                                });
+                            } else {
+                                app.play_selected();
+                            }
+                        }
+                    }
                     KeyCode::Char(' ') => app.stop(),
                     KeyCode::Char('+') => app.volume_up(),
                     KeyCode::Char('-') => app.volume_down(),
-
-                    // Упрощённая версия для MVP:
-                    // Simplified version for MVP:
-                    KeyCode::Char('r') if !app.loading => {
-                        app.loading = true;
-                        app.status = "🔄 Fetching...".into();
-
-                        // Блокирующий вызов, но с флагом
-                        // Blocking call, but with flag
-                        let client = api::FmStreamClient::new();
-                        match tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(
-                                client.search(None, None, None, 20)
-                            )
-                        }) {
-                            Ok(stations) => {
-                                app.stations = stations;
-                                app.selected = 0;
-                                app.status = format!("✅ Loaded {}", app.stations.len());
-                            }
-                            Err(e) => app.status = format!("❌ {}", e),
-                        }
-                        app.loading = false;
+                    KeyCode::Char(c) if c.is_ascii_alphanumeric() || c == ' ' || c == '-' || c == '.' => {
+                        app.search_query.push(c);
+                        app.apply_filter();
                     }
-
-                    KeyCode::Char(c) => app.query.push(c),
-                    KeyCode::Esc => app.query.clear(),
+                    KeyCode::Backspace => {
+                        app.search_query.pop();
+                        app.apply_filter();
+                    }
+                    KeyCode::Esc => {
+                        app.search_query.clear();
+                        app.apply_filter();
+                    }
                     _ => {}
                 }
             }
