@@ -1,1 +1,6 @@
-/target
+target/
+*.lock
+.vscode/
+.idea/
+*.log
+
